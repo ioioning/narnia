@@ -3,13 +3,13 @@ import threading
 import paramiko
 from file_system import VirtualFileSystem
 
-# Згенерований хост-ключ (тимчасовий, для роботи сервера)
+# Згенерований хост-ключ (тимчасовий або збережи на диск)
 HOST_KEY = paramiko.RSAKey.generate(2048)
 
 # Віртуальна файлова система
 vfs = VirtualFileSystem()
 
-# Список дозволених публічних ключів
+# Додай сюди справжній публічний ключ SSH:
 AUTHORIZED_KEYS = [
     "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCLrRt3cU31Wly3rVYAX5bQoM5CKIPJJOYEfAfMJ/LM4QGTqgY52byz/bREW+PY1ujW6xddylR4G/pPYE1iG+vnft7GdXoeWR8y/pODgM2MNk2ow44r7PrSXskXDX5YR0tEBjfNVAFDskmquUwYcPlRJ01EwJcY8Bg0BQfWX9HLO1Ows82Y2eVdYD5M0rKJKzaQud4nVhqcmUBly0LpNyVilCrHrvypqjGS+AGYiZ/64B/lpPGM+cyFp0S+7p80YBCK6eI4sX+9e25KZj4+wORo6EBsB0iA1UvCp+IOuTbHB39ZGBpGvgDIWOL8Y8B0F5D9t2PAdFe82t439O1pk/qw6VR01UwSuUWPa4WID37KZklW7KdYBmTEmxkyYljD7vo5ZZsY+w1AVrOUf5/LTyBK2lPm3whh0UGvoPRTl7AI9Z8K/0W/1AsYypkHlkrvyjEsR9bhT3jwplou+XXh5RRxn5BJpQZuRXl6PPD5vZqHDTy7hkYJz9iTSooqUwi2Vd8= daniaa@zonex"
 ]
@@ -19,7 +19,6 @@ class Server(paramiko.ServerInterface):
         self.event = threading.Event()
 
     def check_auth_publickey(self, username, key):
-        # Отримуємо ключ у вигляді рядка
         key_str = f"{key.get_name()} {key.get_base64()}"
         if key_str in AUTHORIZED_KEYS:
             vfs.init_user(username)
@@ -30,9 +29,11 @@ class Server(paramiko.ServerInterface):
         return 'publickey'
 
     def check_channel_request(self, kind, chanid):
+        print(f"Channel request: kind={kind}, chanid={chanid}")
         return paramiko.OPEN_SUCCEEDED if kind == 'session' else paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
 
     def check_channel_shell_request(self, channel):
+        print("Shell request received.")
         self.event.set()
         return True
 
