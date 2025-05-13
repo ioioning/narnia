@@ -3,37 +3,38 @@ import threading
 import paramiko
 from file_system import VirtualFileSystem
 
-# Згенерований хост-ключ (тимчасовий або збережи на диск)
+# Згенерований хост-ключ (тимчасовий, для роботи сервера)
 HOST_KEY = paramiko.RSAKey.generate(2048)
 
 # Віртуальна файлова система
 vfs = VirtualFileSystem()
 
-# Додай сюди справжній публічний ключ SSH:
+# Список дозволених публічних ключів
 AUTHORIZED_KEYS = [
-    "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCLrRt3cU31Wly3rVYAX5bQoM5CKIPJJOYEfAfMJ/LM4QGTqgY52byz/bREW+PY1ujW6xddylR4G/pPYE1iG+vnft7GdXoeWR8y/pODgM2MNk2ow44r7PrSXskXDX5YR0tEBjfNVAFDskmquUwYcPlRJ01EwJcY8Bg0BQfWX9HLO1Ows82Y2eVdYD5M0rKJKzaQud4nVhqcmUBly0LpNyVilCrHrvypqjGS+AGYiZ/64B/lpPGM+cyFp0S+7p80YBCK6eI4sX+9e25KZj4+wORo6EBsB0iA1UvCp+IOuTbHB39ZGBpGvgDIWOL8Y8B0F5D9t2PAdFe82t439O1pk/qw6VR01UwSuUWPa4WID37KZklW7KdYBmTEmxkyYljD7vo5ZZsY+w1AVrOUf5/LTyBK2lPm3whh0UGvoPRTl7AI9Z8K/0W/1AsYypkHlkrvyjEsR9bhT3jwplou+XXh5RRxn5BJpQZuRXl6PPD5vZqHDTy7hkYJz9iTSooqUwi2Vd8= daniaa@zonex"
+    "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCLrRt3cU31Wly3rVYAX5bQoM5CKIPJJOYEfAfMJ/LM4QGTqgY52byz/bREW+PY1ujW6xddylR4G/pPYE1iG+vnft7GdXoeWR8y/pODgM2MNk2ow44r7PrSXskXDX5YR0tEBjfNVAFDskmquUwYcPlRJ01EwJcY8Bg0BQfWX9HLO1Ows82Y2eVdYD5M0rKJKzaQud4nVhqcmUBly0LpNyVilCrHrvypqjGS+AGYiZ/64B/lpPGM+cyFp0S+7p80YBCK6eI4sX+9e25KZj4+wORo6EBsB0iA1UvCp+IOuTbHB39ZGBpGvgDIWOL8Y8B0F5D9t2PAdFe82t439O1pk/qw6VR01UwSuUWPa4WID37KZklW7KdYBmTEmxkyYljD7vo5ZZsY+w1AVrOUf5/LTyBK2lPm3whh0UGvoPRTl7AI9Z8K/0W/1AsYypkHlkrvyjEsR9bhT3jwplou+XXh5RRxn5BJpQZuRXl6PPD5vZqHDTy7hkYJz9iTSooqUwi2Vd8= daniaa@zonex"  # Додайте тут ваші дозволені публічні ключі
 ]
 
 class Server(paramiko.ServerInterface):
     def __init__(self):
         self.event = threading.Event()
 
-    def check_auth_publickey(self, username, key):
-        key_str = f"{key.get_name()} {key.get_base64()}"
-        if key_str in AUTHORIZED_KEYS:
-            vfs.init_user(username)
-            return paramiko.AUTH_SUCCESSFUL
-        return paramiko.AUTH_FAILED
+def check_auth_publickey(self, username, key):
+    key_str = f"{key.get_name()} {key.get_base64()}"
+    print(f"Received key: {key_str}")
+    if key_str in AUTHORIZED_KEYS:
+        vfs.init_user(username)
+        return paramiko.AUTH_SUCCESSFUL
+    return paramiko.AUTH_FAILED
 
     def get_allowed_auths(self, username):
         return 'publickey'
 
     def check_channel_request(self, kind, chanid):
-        print(f"Channel request: kind={kind}, chanid={chanid}")
-        return paramiko.OPEN_SUCCEEDED if kind == 'session' else paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+        if kind == 'session':
+            return paramiko.OPEN_SUCCEEDED
+        return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
 
     def check_channel_shell_request(self, channel):
-        print("Shell request received.")
         self.event.set()
         return True
 
@@ -43,14 +44,16 @@ def handle_connection(client):
 
     server = Server()
     transport.start_server(server=server)
-    channel = transport.accept(20)
+    
+    channel = transport.accept(30)  # Збільшений тайм-аут
 
     if channel is None:
-        print("No channel.")
+        print("No channel. Timeout or authentication failure.")
         return
 
     server.event.wait(10)
     username = transport.get_username()
+    print(f"Authenticated user: {username}")
     channel.send(f"Welcome {username}!\n")
 
     while True:
