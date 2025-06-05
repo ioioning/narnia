@@ -22,11 +22,9 @@ HOST_KEY = key
 # Віртуальна файлова система
 vfs = VirtualFileSystem()
 vfs.init_user("test")
-vfs.write_file("test", "authorized_keys", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJX3tHXdehuJHkGl/mcApERHd3Huy5YUs+cZJO6gZZQ6")  # Додайте тут ваші дозволені публічні ключі
-# Список дозволених публічних ключів
-AUTHORIZED_KEYS = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJX3tHXdehuJHkGl/mcApERHd3Huy5YUs+cZJO6gZZQ6"  # Додайте тут ваші дозволені публічні ключі
-]
+vfs.write_file("test", ".ssh/authorized_keys", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJX3tHXdehuJHkGl/mcApERHd3Huy5YUs+cZJO6gZZQ6")  # Додайте тут ваші дозволені публічні ключі #тут можна додати користувачі як тут показано на прикладі
+vfs.init_user("root")
+vfs.write_file("root", ".ssh/authorized_keys", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINmX+iJKBlqlXkLvJ8OA9WrO8+bmf5PTcaUNw2/Lig/L")  # Додайте тут ваші дозволені публічні ключі
 
 class Server(paramiko.ServerInterface):
     def __init__(self):
@@ -35,15 +33,9 @@ class Server(paramiko.ServerInterface):
     def check_auth_publickey(self, username, key):
         key_str = f"{key.get_name()} {key.get_base64()}"
         print(f"Received key: {key_str}")
-        #if key_str in AUTHORIZED_KEYS:
-        key_test = vfs.read_file(username, "authorized_keys")
-        print(f"existing key: {key_test}")
-        if key_str == vfs.read_file(username, "authorized_keys"):
-        #if key_str in AUTHORIZED_KEYS:
-            #vfs.init_user(username)
+        if key_str == vfs.read_file(username, ".ssh/authorized_keys"):
             return paramiko.AUTH_SUCCESSFUL
             
-        #return paramiko.AUTH_SUCCESSFUL
         return paramiko.AUTH_FAILED
 
     def get_allowed_auths(self, username):
@@ -65,7 +57,7 @@ def handle_connection(client):
     server = Server()
     transport.start_server(server=server)
     
-    channel = transport.accept(300)  # Збільшений тайм-аут
+    channel = transport.accept(30)  # Збільшений тайм-аут
 
     if channel is None:
         print("No channel. Timeout or authentication failure.")
