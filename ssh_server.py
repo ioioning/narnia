@@ -3,21 +3,43 @@ import threading
 import paramiko
 from file_system import VirtualFileSystem
 
-HOST_KEY = paramiko.RSAKey.generate(2048)
+import os
+
+HOST_KEY_PATH = "host_keys/ssh_host_rsa_key"
+
+if not os.path.exists(HOST_KEY_PATH):
+    os.makedirs("host_keys", exist_ok=True)
+    # Генеруємо ключ і зберігаємо у файл
+    key = paramiko.RSAKey.generate(2048)
+    key.write_private_key_file(HOST_KEY_PATH)
+    print("Host key generated and saved.")
+else:
+    key = paramiko.RSAKey(filename=HOST_KEY_PATH)
+    print("Host key loaded from file.")
+
+HOST_KEY = key
+
+# Віртуальна файлова система
 vfs = VirtualFileSystem()
+vfs.init_user("test")
+vfs.write_file("test", ".ssh/authorized_keys", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJX3tHXdehuJHkGl/mcApERHd3Huy5YUs+cZJO6gZZQ6")  # Додайте тут ваші дозволені публічні ключі #тут можна додати користувачі як тут показано на прикладі
+vfs.init_user("root")
+vfs.write_file("root", ".ssh/authorized_keys", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINmX+iJKBlqlXkLvJ8OA9WrO8+bmf5PTcaUNw2/Lig/L")  # Додайте тут ваші дозволені публічні ключі
 
 class Server(paramiko.ServerInterface):
     def __init__(self):
         self.event = threading.Event()
-        self.username = None
 
-    def check_auth_none(self, username):
-        self.username = username
-        vfs.init_user(username)
-        return paramiko.AUTH_SUCCESSFUL
+    def check_auth_publickey(self, username, key):
+        key_str = f"{key.get_name()} {key.get_base64()}"
+        print(f"Received key: {key_str}")
+        if key_str == vfs.read_file(username, ".ssh/authorized_keys"):
+            return paramiko.AUTH_SUCCESSFUL
+            
+        return paramiko.AUTH_FAILED
 
     def get_allowed_auths(self, username):
-        return 'none'
+        return 'publickey'
 
     def check_channel_request(self, kind, chanid):
         if kind == 'session':
@@ -40,7 +62,7 @@ def handle_connection(client):
         return
 
     server.event.wait(10)
-    username = server.username or "unknown"
+    username = transport.get_username()
     print(f"Authenticated user: {username}")
     channel.send(f"Welcome {username}!\n")
 
